@@ -31,6 +31,8 @@ import (
 
 	"gopkg.in/mgo.v2"
 	"gopkg.in/mgo.v2/bson"
+	"golang.org/x/net/context"
+	"google.golang.org/appengine/urlfetch"
 )
 
 const (
@@ -59,6 +61,7 @@ type Service struct {
 	verbose          bool
 	simulate         bool // Dry run (NOP)
 	keepFilesPattern *regexp.Regexp
+	client *http.Client // appengine solution
 
 	mongoDbURI *url.URL // Can be nil: checksum checks are disabled
 	dbSession  *mgo.Session
@@ -99,7 +102,7 @@ type uploadResponse struct {
 // The uri parameter must be a valid URI with the cloudinary:// scheme,
 // e.g.
 //  cloudinary://api_key:api_secret@cloud_name
-func Dial(uri string) (*Service, error) {
+func Dial(uri string, ctx context.Context) (*Service, error) {
 	u, err := url.Parse(uri)
 	if err != nil {
 		return nil, err
@@ -118,6 +121,7 @@ func Dial(uri string) (*Service, error) {
 		uploadResType: ImageType,
 		simulate:      false,
 		verbose:       false,
+		client: urlfetch.Client(ctx),
 	}
 	// Default upload URI to the service. Can change at runtime in the
 	// Upload() function for raw file uploading.
@@ -387,16 +391,23 @@ func (s *Service) uploadFile(fullPath string, data io.Reader, randomPublicId boo
 	if s.uploadResType == RawType {
 		upURI = strings.Replace(upURI, imageType, rawType, 1)
 	}
+
+	//req, err := s.client.Post(upURI, buf)
 	req, err := http.NewRequest("POST", upURI, buf)
 	if err != nil {
 		return fullPath, err
 	}
 	req.Header.Set("Content-Type", w.FormDataContentType())
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := s.client.Do(req)
 
 	if err != nil {
+		log.Printf("Resp body: %v", resp.Body)
+		log.Fatalf("Error Post to Cloudinary: %v" , err)
 		return fullPath, err
 	}
+
+	//resp, err := s.client.Post(upURI, w.FormDataContentType(), buf)
+	log.Printf("Uploadurl: %v", upURI)
 
 	if resp.StatusCode == http.StatusOK {
 		// Body is JSON data and looks like:
@@ -427,6 +438,8 @@ func (s *Service) uploadFile(fullPath string, data io.Reader, randomPublicId boo
 		}
 		return upInfo.PublicId, nil
 	} else {
+		content, _ := ioutil.ReadAll(resp.Body)
+		log.Printf("Resp body: %v", string(content))
 		return fullPath, errors.New("Request error: " + resp.Status)
 	}
 }
@@ -554,7 +567,8 @@ func (s *Service) Delete(publicId, prepend string, rtype ResourceType) error {
 	if rtype == RawType {
 		rt = rawType
 	}
-	resp, err := http.PostForm(fmt.Sprintf("%s/%s/%s/destroy/", baseUploadUrl, s.cloudName, rt), data)
+
+	resp, err := s.client.PostForm(fmt.Sprintf("%s/%s/%s/destroy/", baseUploadUrl, s.cloudName, rt), data)
 	if err != nil {
 		return err
 	}
