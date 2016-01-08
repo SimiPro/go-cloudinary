@@ -433,19 +433,19 @@ func (s *Service) uploadFile(fullPath string, data io.Reader, randomPublicId boo
 
 // helpers
 func (s *Service) UploadStaticRaw(path string, data io.Reader, prepend string) (string, error) {
-	return s.Upload(path, data, prepend, false, RawType)
+	return s.Upload(path, data, prepend, true, RawType)
 }
 
 func (s *Service) UploadStaticImage(path string, data io.Reader, prepend string) (string, error) {
-	return s.Upload(path, data, prepend, false, ImageType)
+	return s.Upload(path, data, prepend, true, ImageType)
 }
 
 func (s *Service) UploadRaw(path string, data io.Reader, prepend string) (string, error) {
-	return s.Upload(path, data, prepend, false, RawType)
+	return s.Upload(path, data, prepend, true, RawType)
 }
 
 func (s *Service) UploadImage(path string, data io.Reader, prepend string) (string, error) {
-	return s.Upload(path, data, prepend, false, ImageType)
+	return s.Upload(path, data, prepend, true, ImageType)
 }
 
 // Upload a file or a set of files to the cloud. The path parameter is
